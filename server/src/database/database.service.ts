@@ -11,3 +11,6 @@ export class DatabaseService extends PrismaClient implements OnModuleInit, OnMod
     await this.$disconnect();
   }
 }
+
+// Alias for test imports
+export { DatabaseService as PrismaService };

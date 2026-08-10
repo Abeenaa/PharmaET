@@ -20,7 +20,20 @@ async function main() {
     },
   });
 
-  console.log('✓ Branch created:', branch1.id);
+  const branch2 = await prisma.branch.upsert({
+    where: { license_number: 'BRANCH-002' },
+    update: {},
+    create: {
+      name: 'Secondary Branch',
+      location: 'Dire Dawa',
+      license_number: 'BRANCH-002',
+      contact_phone: '+251922222222',
+      contact_email: 'secondary@pharmaet.local',
+      is_active: true,
+    },
+  });
+
+  console.log('✓ Branches created:', branch1.id, branch2.id);
 
   // Create Super Admin user
   const hashedPassword = await bcrypt.hash('admin123', 10);
@@ -89,6 +102,23 @@ async function main() {
   });
 
   console.log('✓ Cashier user created:', cashier.id);
+
+  // Create Branch Manager for second branch
+  const manager2 = await prisma.user.upsert({
+    where: { email: 'manager2@pharmaet.local' },
+    update: {},
+    create: {
+      email: 'manager2@pharmaet.local',
+      password_hash: hashedPassword,
+      name: 'Manager Secondary',
+      branch_id: branch2.id,
+      role: UserRole.BRANCH_ADMIN,
+      is_active: true,
+      requires_password_change: false,
+    },
+  });
+
+  console.log('✓ Second branch manager created:', manager2.id);
 
   // Create categories
   const antibiotic = await prisma.category.upsert({
