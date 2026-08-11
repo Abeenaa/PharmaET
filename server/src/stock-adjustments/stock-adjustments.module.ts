@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
+import { StockAdjustmentsService } from './stock-adjustments.service';
+import { StockAdjustmentsController } from './stock-adjustments.controller';
 
 @Module({
-  imports: [],
-  providers: [],
-  exports: [],
+  providers: [StockAdjustmentsService],
+  controllers: [StockAdjustmentsController],
+  exports: [StockAdjustmentsService],
 })
 export class StockAdjustmentsModule {}
