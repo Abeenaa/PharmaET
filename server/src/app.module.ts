@@ -7,7 +7,7 @@ import { BranchesModule } from './branches/branches.module';
 import { MedicinesModule } from './medicines/medicines.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
-import { GrnsModule } from './grns/grns.module';
+import { GRNsModule } from './grns/grns.module';
 import { SalesModule } from './sales/sales.module';
 import { StockAdjustmentsModule } from './stock-adjustments/stock-adjustments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -29,7 +29,7 @@ import { DatabaseModule } from './database/database.module';
     MedicinesModule,
     SuppliersModule,
     PurchaseOrdersModule,
-    GrnsModule,
+    GRNsModule,
     SalesModule,
     StockAdjustmentsModule,
     DashboardModule,

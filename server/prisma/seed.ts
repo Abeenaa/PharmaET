@@ -133,6 +133,43 @@ async function main() {
 
   console.log('✓ Category created:', antibiotic.name);
 
+  // Create suppliers (only if not exists)
+  const existingSupplier1 = await prisma.supplier.findFirst({
+    where: { email: 'supplier@globalpharma.com' },
+  });
+
+  const existingSupplier2 = await prisma.supplier.findFirst({
+    where: { email: 'supplier@localdist.com' },
+  });
+
+  if (!existingSupplier1) {
+    await prisma.supplier.create({
+      data: {
+        name: 'Global Pharma Ltd',
+        contact_person: 'John Supplier',
+        email: 'supplier@globalpharma.com',
+        phone: '+251911999999',
+        address: 'Addis Ababa',
+        is_active: true,
+      },
+    });
+  }
+
+  if (!existingSupplier2) {
+    await prisma.supplier.create({
+      data: {
+        name: 'Local Distributors Inc',
+        contact_person: 'Jane Distributor',
+        email: 'supplier@localdist.com',
+        phone: '+251922999999',
+        address: 'Dire Dawa',
+        is_active: true,
+      },
+    });
+  }
+
+  console.log('✓ Suppliers created');
+
   console.log('✓  Seed completed successfully!');
 }
 
