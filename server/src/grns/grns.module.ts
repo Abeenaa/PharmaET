@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
+import { GRNsService } from './grns.service';
+import { GRNsController } from './grns.controller';
 
 @Module({
-  imports: [],
-  providers: [],
-  exports: [],
+  providers: [GRNsService],
+  controllers: [GRNsController],
+  exports: [GRNsService],
 })
-export class GrnsModule {}
+export class GRNsModule {}
