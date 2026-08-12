@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateBatchDto } from './dto/create-batch.dto';
+import { CONFIG } from '../config/constants';
 
 @Injectable()
 export class BatchesService {
@@ -97,7 +98,7 @@ export class BatchesService {
       return 'EXPIRED';
     }
 
-    if (daysUntilExpiry <= 30) {
+    if (daysUntilExpiry <= CONFIG.EXPIRING_SOON_DAYS) {
       return 'EXPIRING_SOON';
     }
 

@@ -63,16 +63,16 @@ export class MedicinesController {
     return this.medicinesService.create(dto);
   }
 
-  @Get()
-  @Roles('SUPER_ADMIN', 'BRANCH_ADMIN', 'PHARMACIST', 'CASHIER')
-  async findAll(@Query('search') search?: string) {
-    return this.medicinesService.findAll(search);
-  }
-
   @Get('barcode/:barcode')
   @Roles('SUPER_ADMIN', 'BRANCH_ADMIN', 'PHARMACIST', 'CASHIER')
   async findByBarcode(@Param('barcode') barcode: string) {
     return this.medicinesService.findByBarcode(barcode);
+  }
+
+  @Get()
+  @Roles('SUPER_ADMIN', 'BRANCH_ADMIN', 'PHARMACIST', 'CASHIER')
+  async findAll(@Query('search') search?: string) {
+    return this.medicinesService.findAll(search);
   }
 
   @Get(':id')

@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from './dto';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,6 +8,20 @@ export class PurchaseOrdersService {
   constructor(private prisma: DatabaseService) {}
 
   async create(data: CreatePurchaseOrderDto, userId: string) {
+    // Validate userId is provided
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+
+    // Validate branch exists
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: data.branch_id },
+    });
+
+    if (!branch || !branch.is_active) {
+      throw new BadRequestException('Branch not found or inactive');
+    }
+
     // Validate supplier exists and is active
     const supplier = await this.prisma.supplier.findUnique({
       where: { id: data.supplier_id },
@@ -30,6 +44,12 @@ export class PurchaseOrdersService {
       if (item.quantity_ordered <= 0) {
         throw new BadRequestException('Quantity must be positive');
       }
+    }
+
+    // Validate no duplicate medicines in items
+    const medicineIds = data.items.map(item => item.medicine_id);
+    if (new Set(medicineIds).size !== medicineIds.length) {
+      throw new BadRequestException('Duplicate medicines in purchase order items');
     }
 
     // Generate PO number
@@ -123,7 +143,35 @@ export class PurchaseOrdersService {
       throw new BadRequestException('Can only update DRAFT purchase orders');
     }
 
-    // Delete existing items and create new ones
+    // Validate supplier if provided
+    if (data.supplier_id) {
+      const supplier = await this.prisma.supplier.findUnique({
+        where: { id: data.supplier_id },
+      });
+
+      if (!supplier || !supplier.is_active) {
+        throw new BadRequestException('Supplier not found or inactive');
+      }
+    }
+
+    // Validate medicines if provided
+    if (data.items) {
+      for (const item of data.items) {
+        const medicine = await this.prisma.medicine.findUnique({
+          where: { id: item.medicine_id },
+        });
+
+        if (!medicine) {
+          throw new BadRequestException(`Medicine not found: ${item.medicine_id}`);
+        }
+
+        if (item.quantity_ordered <= 0) {
+          throw new BadRequestException('Quantity must be positive');
+        }
+      }
+    }
+
+    // Delete existing items and create new ones if provided
     await this.prisma.pOItem.deleteMany({
       where: { po_id: id },
     });
@@ -131,13 +179,15 @@ export class PurchaseOrdersService {
     return this.prisma.purchaseOrder.update({
       where: { id },
       data: {
-        supplier_id: data.supplier_id,
-        po_items: {
-          create: data.items.map((item) => ({
-            medicine_id: item.medicine_id,
-            quantity_ordered: item.quantity_ordered,
-          })),
-        },
+        ...(data.supplier_id && { supplier_id: data.supplier_id }),
+        ...(data.items && {
+          po_items: {
+            create: data.items.map((item) => ({
+              medicine_id: item.medicine_id,
+              quantity_ordered: item.quantity_ordered,
+            })),
+          },
+        }),
         updated_at: new Date(),
       },
       include: {

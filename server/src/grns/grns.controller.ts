@@ -6,6 +6,7 @@ import {
   Param,
   UseGuards,
   Query,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -25,13 +26,22 @@ export class GRNsController {
     @Body() dto: CreateGRNDto,
     @CurrentUser() user: any,
   ) {
-    return this.grnsService.create(dto, user.id);
+    return this.grnsService.create(dto, user.id, user);
   }
 
   @Get()
   @Roles('SUPER_ADMIN', 'BRANCH_ADMIN', 'PHARMACIST')
-  async findAll(@Query('branchId') branchId?: string) {
-    return this.grnsService.findAll(branchId);
+  async findAll(
+    @CurrentUser() user: any,
+    @Query('branchId') branchId?: string,
+  ) {
+    // Validate branch access
+    if (branchId && user.role !== 'SUPER_ADMIN' && user.branch_id !== branchId) {
+      throw new ForbiddenException('Cannot access other branch GRNs');
+    }
+
+    const queryBranchId = branchId || (user.role === 'SUPER_ADMIN' ? undefined : user.branch_id);
+    return this.grnsService.findAll(queryBranchId);
   }
 
   @Get(':id')
@@ -40,19 +50,21 @@ export class GRNsController {
     return this.grnsService.findById(id);
   }
 
-  @Post(':id/items')
+  @Post(':grnId/items')
   @Roles('SUPER_ADMIN', 'BRANCH_ADMIN', 'PHARMACIST')
   async addItem(
-    @Param('id') grnId: string,
-    @Param('poItemId') poItemId: string,
+    @Param('grnId') grnId: string,
     @Body() dto: AddGRNItemDto,
   ) {
-    return this.grnsService.addItem(grnId, poItemId, dto);
+    return this.grnsService.addItem(grnId, dto.po_item_id, dto);
   }
 
   @Post(':id/finalize')
   @Roles('SUPER_ADMIN', 'BRANCH_ADMIN', 'PHARMACIST')
-  async finalize(@Param('id') id: string) {
-    return this.grnsService.finalize(id);
+  async finalize(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.grnsService.finalize(id, user);
   }
 }

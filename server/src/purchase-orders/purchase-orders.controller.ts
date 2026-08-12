@@ -7,6 +7,8 @@ import {
   Param,
   UseGuards,
   Query,
+  BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -26,13 +28,27 @@ export class PurchaseOrdersController {
     @Body() dto: CreatePurchaseOrderDto,
     @CurrentUser() user: any,
   ) {
+    if (!user || !user.id) {
+      throw new BadRequestException('User information is missing from authentication token');
+    }
     return this.purchaseOrdersService.create(dto, user.id);
   }
 
   @Get()
   @Roles('SUPER_ADMIN', 'BRANCH_ADMIN', 'PHARMACIST')
-  async findAll(@Query('branchId') branchId?: string) {
-    return this.purchaseOrdersService.findAll(branchId);
+  async findAll(
+    @CurrentUser() user: any,
+    @Query('branchId') branchId?: string,
+  ) {
+    // Validate branch access
+    if (branchId && user.role !== 'SUPER_ADMIN' && user.branch_id !== branchId) {
+      throw new ForbiddenException('Cannot access other branch POs');
+    }
+
+    // Default to user's branch if not super admin
+    const queryBranchId = branchId || (user.role === 'SUPER_ADMIN' ? undefined : user.branch_id);
+    
+    return this.purchaseOrdersService.findAll(queryBranchId);
   }
 
   @Get(':id')
@@ -46,19 +62,44 @@ export class PurchaseOrdersController {
   async update(
     @Param('id') id: string,
     @Body() dto: UpdatePurchaseOrderDto,
+    @CurrentUser() user: any,
   ) {
+    // Retrieve PO and validate user has access to this branch
+    const po = await this.purchaseOrdersService.findById(id);
+    if (user.role !== 'SUPER_ADMIN' && user.branch_id !== po.branch_id) {
+      throw new ForbiddenException('Cannot update PO from other branches');
+    }
+
     return this.purchaseOrdersService.update(id, dto);
   }
 
   @Post(':id/submit')
   @Roles('SUPER_ADMIN', 'BRANCH_ADMIN', 'PHARMACIST')
-  async submit(@Param('id') id: string) {
+  async submit(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    // Retrieve PO and validate user has access to this branch
+    const po = await this.purchaseOrdersService.findById(id);
+    if (user.role !== 'SUPER_ADMIN' && user.branch_id !== po.branch_id) {
+      throw new ForbiddenException('Cannot submit PO from other branches');
+    }
+
     return this.purchaseOrdersService.submit(id);
   }
 
   @Post(':id/cancel')
   @Roles('SUPER_ADMIN', 'BRANCH_ADMIN')
-  async cancel(@Param('id') id: string) {
+  async cancel(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    // Retrieve PO and validate user has access to this branch
+    const po = await this.purchaseOrdersService.findById(id);
+    if (user.role !== 'SUPER_ADMIN' && user.branch_id !== po.branch_id) {
+      throw new ForbiddenException('Cannot cancel PO from other branches');
+    }
+
     return this.purchaseOrdersService.cancel(id);
   }
 }

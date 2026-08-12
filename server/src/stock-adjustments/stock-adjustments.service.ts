@@ -7,6 +7,15 @@ export class StockAdjustmentsService {
   constructor(private prisma: DatabaseService) {}
 
   async create(data: CreateStockAdjustmentDto, userId: string) {
+    // Validate branch exists
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: data.branch_id },
+    });
+
+    if (!branch || !branch.is_active) {
+      throw new BadRequestException('Branch not found or inactive');
+    }
+
     // Validate medicine exists
     const medicine = await this.prisma.medicine.findUnique({
       where: { id: data.medicine_id },

@@ -2,12 +2,13 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { CreateGRNDto, UpdateGRNDto, FinalizeGRNDto } from './dto';
 import { v4 as uuidv4 } from 'uuid';
+import { CONFIG } from '../config/constants';
 
 @Injectable()
 export class GRNsService {
   constructor(private prisma: DatabaseService) {}
 
-  async create(data: CreateGRNDto, userId: string) {
+  async create(data: CreateGRNDto, userId: string, user?: any) {
     // Validate PO exists
     const po = await this.prisma.purchaseOrder.findUnique({
       where: { id: data.po_id },
@@ -20,8 +21,18 @@ export class GRNsService {
       throw new BadRequestException('Purchase order not found');
     }
 
+    // Validate user has access to PO's branch
+    if (user && user.role !== 'SUPER_ADMIN' && user.branch_id !== po.branch_id) {
+      throw new BadRequestException('Cannot create GRN for PO in other branches');
+    }
+
     if (po.status !== 'PENDING') {
       throw new BadRequestException('PO must be in PENDING status');
+    }
+
+    // Validate PO has items
+    if (po.po_items.length === 0) {
+      throw new BadRequestException('PO must have items before creating GRN');
     }
 
     // Generate GRN number
@@ -131,15 +142,16 @@ export class GRNsService {
       throw new BadRequestException('PO item not found');
     }
 
-    // Validate quantity doesn't exceed PO quantity
-    const existingGRNItem = await this.prisma.gRNItem.findFirst({
+    // Validate quantity doesn't exceed PO quantity - check all GRN items for this PO item
+    const existingGRNItems = await this.prisma.gRNItem.findMany({
       where: {
         grn_id: grnId,
+        po_item_id: poItemId,
       },
     });
 
     const totalReceived =
-      (existingGRNItem?.quantity_received || 0) + data.quantity_received;
+      existingGRNItems.reduce((sum, item) => sum + item.quantity_received, 0) + data.quantity_received;
 
     if (totalReceived > poItem.quantity_ordered) {
       throw new BadRequestException(
@@ -158,8 +170,13 @@ export class GRNsService {
     });
   }
 
-  async finalize(grnId: string) {
+  async finalize(grnId: string, user?: any) {
     const grn = await this.findById(grnId);
+
+    // Validate user has access to GRN's branch
+    if (user && user.role !== 'SUPER_ADMIN' && user.branch_id !== grn.branch_id) {
+      throw new BadRequestException('Cannot finalize GRN from other branches');
+    }
 
     if (grn.status !== 'DRAFT') {
       throw new BadRequestException('GRN is already finalized');
@@ -169,63 +186,68 @@ export class GRNsService {
       throw new BadRequestException('GRN must have at least one item');
     }
 
-    // Create batches and update PO items
-    for (const grnItem of grn.grn_items) {
-      const poItem = grn.purchase_order.po_items.find(
-        (item) => item.id === grnItem.po_item_id,
-      );
+    // Wrap in transaction to ensure atomicity
+    return this.prisma.$transaction(async (tx) => {
+      // Create batches and update PO items
+      for (const grnItem of grn.grn_items) {
+        const poItem = grn.purchase_order.po_items.find(
+          (item) => item.id === grnItem.po_item_id,
+        );
 
-      if (!poItem) {
-        throw new BadRequestException('PO item not found for GRN item');
+        if (!poItem) {
+          throw new BadRequestException('PO item not found for GRN item');
+        }
+
+        // Create batch with calculated status
+        await tx.medicineBatch.create({
+          data: {
+            medicine_id: poItem.medicine_id,
+            batch_number: grnItem.batch_number,
+            quantity: grnItem.quantity_received,
+            expiry_date: grnItem.expiry_date,
+            status: this.calculateBatchStatus(grnItem.expiry_date),
+          },
+        });
+
+        // Update PO item quantity_received
+        await tx.pOItem.update({
+          where: { id: grnItem.po_item_id },
+          data: {
+            quantity_received: {
+              increment: grnItem.quantity_received,
+            },
+          },
+        });
       }
 
-      // Create batch
-      await this.prisma.medicineBatch.create({
+      // Update PO status to RECEIVED
+      await tx.purchaseOrder.update({
+        where: { id: grn.po_id },
         data: {
-          medicine_id: poItem.medicine_id,
-          batch_number: grnItem.batch_number,
-          quantity: grnItem.quantity_received,
-          expiry_date: grnItem.expiry_date,
-          status: this.calculateBatchStatus(grnItem.expiry_date),
+          status: 'RECEIVED',
         },
       });
 
-      // Update PO item quantity_received
-      await this.prisma.pOItem.update({
-        where: { id: grnItem.po_item_id },
+      // Finalize GRN
+      return tx.gRN.update({
+        where: { id: grnId },
         data: {
-          quantity_received: grnItem.quantity_received,
+          status: 'FINALIZED',
+          received_at: new Date(),
         },
-      });
-    }
-
-    // Update PO status to RECEIVED
-    await this.prisma.purchaseOrder.update({
-      where: { id: grn.po_id },
-      data: {
-        status: 'RECEIVED',
-      },
-    });
-
-    // Finalize GRN
-    return this.prisma.gRN.update({
-      where: { id: grnId },
-      data: {
-        status: 'FINALIZED',
-        received_at: new Date(),
-      },
-      include: {
-        purchase_order: {
-          include: {
-            po_items: {
-              include: {
-                medicine: true,
+        include: {
+          purchase_order: {
+            include: {
+              po_items: {
+                include: {
+                  medicine: true,
+                },
               },
             },
           },
+          grn_items: true,
         },
-        grn_items: true,
-      },
+      });
     });
   }
 
@@ -239,7 +261,7 @@ export class GRNsService {
       return 'EXPIRED';
     }
 
-    if (daysUntilExpiry <= 30) {
+    if (daysUntilExpiry <= CONFIG.EXPIRING_SOON_DAYS) {
       return 'EXPIRING_SOON';
     }
 

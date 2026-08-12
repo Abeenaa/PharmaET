@@ -1,6 +1,10 @@
-import { IsString, IsNotEmpty, IsNumber, IsPositive, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsPositive, IsDateString, IsUUID } from 'class-validator';
 
 export class AddGRNItemDto {
+  @IsNotEmpty()
+  @IsUUID()
+  po_item_id: string;
+
   @IsNotEmpty()
   @IsNumber()
   @IsPositive()

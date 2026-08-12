@@ -159,12 +159,11 @@ export class MedicinesService {
   async deactivate(id: string) {
     const medicine = await this.findById(id);
 
-    // Mark as inactive but preserve batch data
     return this.prisma.medicine.update({
       where: { id },
       data: {
-        // Soft deactivate by moving to a special category or flag
-        // For now, we'll keep it simple - just track inactive status
+        // Note: schema missing is_active field. For now, just update timestamp
+        // TODO: Add is_active field to medicine schema
         updated_at: new Date(),
       },
       include: {
