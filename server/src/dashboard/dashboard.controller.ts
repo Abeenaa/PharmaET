@@ -23,13 +23,20 @@ export class DashboardController {
     @Query('branchId') branchId: string,
     @Query('date') date?: string,
   ) {
+    // Use user's branch if not provided or if non-admin, validate access
+    const targetBranchId = branchId || user.branch_id;
+    
+    if (!targetBranchId) {
+      throw new ForbiddenException('Branch ID is required');
+    }
+
     // Validate user has access to the branch
-    if (user.role !== 'SUPER_ADMIN' && user.branch_id !== branchId) {
+    if (user.role !== 'SUPER_ADMIN' && user.branch_id !== targetBranchId) {
       throw new ForbiddenException('Cannot access other branch dashboard');
     }
 
     return this.dashboardService.getSummary(
-      branchId,
+      targetBranchId,
       date ? new Date(date) : undefined,
     );
   }
@@ -40,12 +47,19 @@ export class DashboardController {
     @CurrentUser() user: any,
     @Query('branchId') branchId: string,
   ) {
+    // Use user's branch if not provided or if non-admin, validate access
+    const targetBranchId = branchId || user.branch_id;
+    
+    if (!targetBranchId) {
+      throw new ForbiddenException('Branch ID is required');
+    }
+
     // Validate user has access to the branch
-    if (user.role !== 'SUPER_ADMIN' && user.branch_id !== branchId) {
+    if (user.role !== 'SUPER_ADMIN' && user.branch_id !== targetBranchId) {
       throw new ForbiddenException('Cannot access other branch dashboard');
     }
 
-    return this.dashboardService.getInventoryStatus(branchId);
+    return this.dashboardService.getInventoryStatus(targetBranchId);
   }
 
   @Get('alerts')
@@ -54,11 +68,18 @@ export class DashboardController {
     @CurrentUser() user: any,
     @Query('branchId') branchId: string,
   ) {
+    // Use user's branch if not provided or if non-admin, validate access
+    const targetBranchId = branchId || user.branch_id;
+    
+    if (!targetBranchId) {
+      throw new ForbiddenException('Branch ID is required');
+    }
+
     // Validate user has access to the branch
-    if (user.role !== 'SUPER_ADMIN' && user.branch_id !== branchId) {
+    if (user.role !== 'SUPER_ADMIN' && user.branch_id !== targetBranchId) {
       throw new ForbiddenException('Cannot access other branch alerts');
     }
 
-    return this.dashboardService.getAlerts(branchId);
+    return this.dashboardService.getAlerts(targetBranchId);
   }
 }
